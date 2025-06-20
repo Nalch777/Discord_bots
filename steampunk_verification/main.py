@@ -367,5 +367,25 @@ async def send_welcome_message():
         else:
             print(f"Welcome message already found in {welcome_channel.name}. Not sending again.")
 
-# Run the bot
-bot.run(config.BOT_TOKEN)
+import os
+from flask import Flask
+import threading
+
+# Create a Flask app instance
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 5000)) # Render provides PORT env var
+    app.run(host='0.0.0.0', port=port)
+
+if __name__ == '__main__':
+    # Start the Flask server in a separate thread
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+
+    # Start the Discord bot
+    bot.run(config.BOT_TOKEN)
