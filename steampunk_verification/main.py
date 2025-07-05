@@ -5,7 +5,7 @@ from discord.ui import Button, View, Modal, TextInput
 from discord.utils import get
 import config
 import asyncio
-import logging 
+import logging
 import os
 from flask import Flask, request # Import request to access incoming request data
 import threading
@@ -19,9 +19,9 @@ logging.basicConfig(level=logging.INFO, handlers=[handler])
 
 # Define intents
 intents = discord.Intents.default()
-intents.members = True  # Required to track new members and manage roles
-intents.message_content = True  # Required to read message content (for commands if any, though not strictly needed for this workflow)
-intents.guilds = True  # Required for guild events
+intents.members = True  # Required to track new members and manage roles
+intents.message_content = True  # Required to read message content (for commands if any, though not strictly needed for this workflow)
+intents.guilds = True  # Required for guild events
 
 # Initialize the bot
 bot = commands.Bot(command_prefix="!", intents=intents)
