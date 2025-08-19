@@ -28,22 +28,40 @@ class StreamToLogger:
 stdout_logger = logging.getLogger("STDOUT")
 stderr_logger = logging.getLogger("STDERR")
 
-sys.stdout = StreamToLogger(stdout_logger, logging.DEBUG)
+sys.stdout = StreamToLogger(stdout_logger, logging.INFO)
 sys.stderr = StreamToLogger(stderr_logger, logging.ERROR)
 
 # --- Discord logging handler ---
 class DiscordHandler(logging.Handler):
-    def __init__(self, bot, channel_id: int):
+    def __init__(self, bot, channel_id: int, min_interval_ms: int = 30):
         super().__init__()
         self.bot = bot
         self.channel_id = channel_id
+        self.min_interval = min_interval_ms / 1000  # convert ms -> seconds
+        self._last_sent = 0
+        self._queue = asyncio.Queue()
+        # Start the background worker
+        self._task = asyncio.create_task(self._worker())
 
     def emit(self, record):
         if record.levelno >= logging.WARNING:
             log_entry = self.format(record)
             # schedule coroutine safely
-            asyncio.run_coroutine_threadsafe(self._send_log(log_entry, record.levelname), self.bot.loop)
-
+            # asyncio.run_coroutine_threadsafe(self._send_log(log_entry, record.levelname), self.bot.loop)
+            """Queue the log record instead of sending immediately."""
+            self._queue.put_nowait((log_entry, record.levelname))
+    
+    async def _worker(self):
+        """Continuously process the log queue, rate-limiting to `min_interval`."""
+        while True:
+            message, levelname = await self._queue.get()
+            now = time.time()
+            elapsed = now - self._last_sent
+            if elapsed < self.min_interval:
+                await asyncio.sleep(self.min_interval - elapsed)
+            await self._send_log(message, levelname)
+            self._last_sent = time.time()
+            
     async def _send_log(self, message: str, levelname: str):
         await self.bot.wait_until_ready()
         channel = self.bot.get_channel(self.channel_id)
@@ -57,7 +75,7 @@ class DiscordHandler(logging.Handler):
                 logging.error(f"Failed to send log to Discord: {e}")
 
 def setup_discord_logging(bot, log_channel_id: int):
-    discord_handler = DiscordHandler(bot, log_channel_id)
+    discord_handler = DiscordHandler(bot, log_channel_id, min_interval_ms=30)
     discord_handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
     logging.getLogger().addHandler(discord_handler)
     
