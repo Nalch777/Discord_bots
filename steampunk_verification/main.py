@@ -374,7 +374,7 @@ async def on_ready():
     Ensures the welcome message is sent to the designated channel.
     """
     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
-    setup_discord_logging(bot, config.LOG_CHANNEL_ID)
+    setup_discord_logging(bot, config.BOT_LOG_CHANNEL_ID)
     # Ensure the welcome message is sent if it's not already there
     await send_welcome_message()
 
