@@ -28,7 +28,7 @@ class StreamToLogger:
 stdout_logger = logging.getLogger("STDOUT")
 stderr_logger = logging.getLogger("STDERR")
 
-sys.stdout = StreamToLogger(stdout_logger, logging.INFO)
+sys.stdout = StreamToLogger(stdout_logger, logging.DEBUG)
 sys.stderr = StreamToLogger(stderr_logger, logging.ERROR)
 
 # --- Discord logging handler ---
@@ -39,7 +39,7 @@ class DiscordHandler(logging.Handler):
         self.channel_id = channel_id
 
     def emit(self, record):
-        if record.levelno >= logging.WARNING:
+        if record.levelno >= logging.INFO:
             log_entry = self.format(record)
             # schedule coroutine safely
             asyncio.run_coroutine_threadsafe(self._send_log(log_entry, record.levelname), self.bot.loop)
