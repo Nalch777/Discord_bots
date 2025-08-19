@@ -44,12 +44,12 @@ class DiscordHandler(logging.Handler):
         self._task = asyncio.create_task(self._worker())
 
     def emit(self, record):
-        if record.levelno >= logging.WARNING:
-            log_entry = self.format(record)
+        """Queue the log record instead of sending immediately."""
+        # if record.levelno >= logging.WARNING:
+        log_entry = self.format(record)
             # schedule coroutine safely
             # asyncio.run_coroutine_threadsafe(self._send_log(log_entry, record.levelname), self.bot.loop)
-            """Queue the log record instead of sending immediately."""
-            self._queue.put_nowait((log_entry, record.levelname))
+        self._queue.put_nowait((log_entry, record.levelname))
     
     async def _worker(self):
         """Continuously process the log queue, rate-limiting to `min_interval`."""
