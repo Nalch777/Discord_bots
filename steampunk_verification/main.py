@@ -83,21 +83,21 @@ app = Flask(__name__)
 
 # Configure Flask logging
 flask_logger = logging.getLogger('flask_app')
-flask_logger.setLevel(logging.INFO)
+flask_logger.setLevel(logging.WARNING)
 flask_logger.propagate = True
 # flask_logger.addHandler(handler) # Use the same handler as discord.py for consistency
 
 @app.before_request
 def log_request_info():
     """Logs information about incoming requests."""
-    flask_logger.info(f"Incoming Request: {request.method} {request.url}")
+    flask_logger.warning(f"Incoming Request: {request.method} {request.url}")
     if request.data:
-        flask_logger.info(f"Request Data: {request.data.decode('utf-8')}")
+        flask_logger.warning(f"Request Data: {request.data.decode('utf-8')}")
 
 @app.after_request
 def log_response_info(response):
     """Logs information about outgoing responses."""
-    flask_logger.info(f"Outgoing Response: Status {response.status_code}")
+    flask_logger.warning(f"Outgoing Response: Status {response.status_code}")
     # You might want to log response data only for certain content types or if it's not too large
     # if response.is_json:
     #     flask_logger.info(f"Response Data: {response.get_data(as_text=True)}")
@@ -106,13 +106,13 @@ def log_response_info(response):
 @app.route('/')
 def home():
     """Home route for the Flask app, indicates the bot is running."""
-    flask_logger.info("Serving / route.")
+    flask_logger.warning("Serving / route.")
     return "Bot is running!"
 
 def run_flask():
     """Starts the Flask server."""
     port = int(os.environ.get("PORT", 5000)) # Render provides PORT env var
-    flask_logger.info(f"Flask app starting on host 0.0.0.0, port {port}")
+    flask_logger.warning(f"Flask app starting on host 0.0.0.0, port {port}")
     app.run(host='0.0.0.0', port=port)
 
 # --- Views for Welcome and Admin Approval ---
