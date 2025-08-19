@@ -39,9 +39,10 @@ class DiscordHandler(logging.Handler):
         self.channel_id = channel_id
 
     def emit(self, record):
-        log_entry = self.format(record)
-        # schedule coroutine safely
-        asyncio.run_coroutine_threadsafe(self._send_log(log_entry, record.levelname), self.bot.loop)
+        if record.levelno >= logging.WARNING:
+            log_entry = self.format(record)
+            # schedule coroutine safely
+            asyncio.run_coroutine_threadsafe(self._send_log(log_entry, record.levelname), self.bot.loop)
 
     async def _send_log(self, message: str, levelname: str):
         await self.bot.wait_until_ready()
@@ -89,14 +90,14 @@ flask_logger.propagate = True
 @app.before_request
 def log_request_info():
     """Logs information about incoming requests."""
-    flask_logger.info(f"Incoming Request: {request.method} {request.url}")
+    flask_logger.warning(f"Incoming Request: {request.method} {request.url}")
     if request.data:
-        flask_logger.info(f"Request Data: {request.data.decode('utf-8')}")
+        flask_logger.warning(f"Request Data: {request.data.decode('utf-8')}")
 
 @app.after_request
 def log_response_info(response):
     """Logs information about outgoing responses."""
-    flask_logger.info(f"Outgoing Response: Status {response.status_code}")
+    flask_logger.warning(f"Outgoing Response: Status {response.status_code}")
     # You might want to log response data only for certain content types or if it's not too large
     # if response.is_json:
     #     flask_logger.info(f"Response Data: {response.get_data(as_text=True)}")
@@ -105,13 +106,13 @@ def log_response_info(response):
 @app.route('/')
 def home():
     """Home route for the Flask app, indicates the bot is running."""
-    flask_logger.info("Serving / route.")
+    flask_logger.warning("Serving / route.")
     return "Bot is running!"
 
 def run_flask():
     """Starts the Flask server."""
     port = int(os.environ.get("PORT", 5000)) # Render provides PORT env var
-    flask_logger.info(f"Flask app starting on host 0.0.0.0, port {port}")
+    flask_logger.warning(f"Flask app starting on host 0.0.0.0, port {port}")
     app.run(host='0.0.0.0', port=port)
 
 # --- Views for Welcome and Admin Approval ---
@@ -131,19 +132,19 @@ class WelcomeView(View):
         Checks if the user is already verified and, if not, presents the verification modal.
         """
         member = interaction.user
-        logging.info(f"Verify button clicked by {member.name} (ID: {member.id}).")
+        logging.warning(f"Verify button clicked by {member.name} (ID: {member.id}).")
 
         # Check if user already has the Verified role
         verified_role = get(member.guild.roles, id=config.VERIFIED_ROLE_ID)
         if verified_role and verified_role in member.roles:
-            logging.info(f"{member.name} already has the Verified role. Sending ephemeral message.")
+            logging.warning(f"{member.name} already has the Verified role. Sending ephemeral message.")
             await interaction.response.send_message(
                 config.VERIFICATION_ALREADY_VERIFIED, ephemeral=True
             )
             return
 
         # Show the verification modal
-        logging.info(f"Presenting VerificationModal to {member.name}.")
+        logging.warning(f"Presenting VerificationModal to {member.name}.")
         await interaction.response.send_modal(VerificationModal(title="Verification Form"))
 
 class AdminApprovalView(View):
@@ -156,7 +157,7 @@ class AdminApprovalView(View):
         self.member_id = member_id
         self.name = name
         self.team_number = team_number
-        logging.info(f"AdminApprovalView init: member_id={member_id}, name={name}, team_number={team_number}")
+        logging.warning(f"AdminApprovalView init: member_id={member_id}, name={name}, team_number={team_number}")
 
     @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, custom_id="approve_button")
     async def approve_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -164,14 +165,14 @@ class AdminApprovalView(View):
         Callback for the 'Approve' button.
         Assigns the Verified role (and optionally a team role) to the user and updates the log message.
         """
-        logging.info(f"Approve button clicked by {interaction.user.name} for member ID: {self.member_id}.")
+        logging.warning(f"Approve button clicked by {interaction.user.name} for member ID: {self.member_id}.")
         await interaction.response.defer() # Acknowledge the interaction immediately
 
         guild = interaction.guild
         member = guild.get_member(self.member_id)
         
         if member is None:
-            logging.warning(f"User with ID {self.member_id} not found during approval (might have left).")
+            logging.error(f"User with ID {self.member_id} not found during approval (might have left).")
             await interaction.followup.send(f"Error: Could not find user with ID {self.member_id}. They might have left the server.", ephemeral=True)
             self.stop() # Stop the view if member is gone
             await interaction.message.delete() # Delete the original log message to clean up
@@ -182,7 +183,7 @@ class AdminApprovalView(View):
         roles_to_add = []
         if verified_role:
             roles_to_add.append(verified_role)
-            logging.info(f"Adding role: {verified_role.name} ({verified_role.id}) to {member.name}.")
+            logging.warning(f"Adding role: {verified_role.name} ({verified_role.id}) to {member.name}.")
 
         # Handle team role (uncomment if you re-enable team role assignment)
         # if self.team_number:
@@ -208,7 +209,7 @@ class AdminApprovalView(View):
         try:
             if roles_to_add:
                 await member.add_roles(*roles_to_add)
-                logging.info(f"Successfully added roles to {member.name}.")
+                logging.warning(f"Successfully added roles to {member.name}.")
             
             # Update the admin log message
             for child in self.children:
@@ -218,12 +219,12 @@ class AdminApprovalView(View):
             embed.color = discord.Color.green()
             embed.add_field(name="Status", value=f"Approved by {interaction.user.mention}", inline=False)
             await interaction.message.edit(embed=embed, view=self)
-            logging.info(f"Admin log message updated to 'Approved' for {member.name}.")
+            logging.warning(f"Admin log message updated to 'Approved' for {member.name}.")
 
             # DM the user
             try:
                 await member.send(config.VERIFICATION_APPROVED_MESSAGE)
-                logging.info(f"Sent approval DM to {member.name}.")
+                logging.warning(f"Sent approval DM to {member.name}.")
             except discord.Forbidden:
                 logging.warning(f"Could not DM {member.name}. User has DMs disabled.")
             except Exception as e:
@@ -249,7 +250,7 @@ class AdminApprovalView(View):
         Callback for the 'Deny' button.
         Updates the log message and DMs the user about the denial.
         """
-        logging.info(f"Deny button clicked by {interaction.user.name} for member ID: {self.member_id}.")
+        logging.warning(f"Deny button clicked by {interaction.user.name} for member ID: {self.member_id}.")
         await interaction.response.defer() # Acknowledge the interaction immediately
 
         guild = interaction.guild
@@ -270,12 +271,12 @@ class AdminApprovalView(View):
         embed.color = discord.Color.red()
         embed.add_field(name="Status", value=f"Denied by {interaction.user.mention}", inline=False)
         await interaction.message.edit(embed=embed, view=self)
-        logging.info(f"Admin log message updated to 'Denied' for {member.name}.")
+        logging.warning(f"Admin log message updated to 'Denied' for {member.name}.")
 
         # DM the user
         try:
             await member.send(config.VERIFICATION_DENIED_MESSAGE)
-            logging.info(f"Sent denial DM to {member.name}.")
+            logging.warning(f"Sent denial DM to {member.name}.")
         except discord.Forbidden:
             logging.warning(f"Could not DM {member.name}. User has DMs disabled.")
         except Exception as e:
@@ -315,12 +316,12 @@ class VerificationModal(Modal):
         Callback when the verification modal is submitted.
         Collects user input and sends it to the admin log channel for review.
         """
-        logging.info(f"VerificationModal submitted by {interaction.user.name} (ID: {interaction.user.id}).")
+        logging.warning(f"VerificationModal submitted by {interaction.user.name} (ID: {interaction.user.id}).")
         member = interaction.user
         name = self.children[0].value
         team_number = self.children[1].value.strip()
 
-        logging.info(f"Modal data received: User={member.id}, Name='{name}', Team='{team_number}'.")
+        logging.warning(f"Modal data received: User={member.id}, Name='{name}', Team='{team_number}'.")
 
         admin_channel = bot.get_channel(config.ADMIN_LOG_CHANNEL_ID)
         if not admin_channel:
@@ -330,7 +331,7 @@ class VerificationModal(Modal):
                 ephemeral=True
             )
             return
-        logging.info(f"Admin channel found: {admin_channel.name} ({admin_channel.id}).")
+        logging.warning(f"Admin channel found: {admin_channel.name} ({admin_channel.id}).")
 
         embed = discord.Embed(
             title=config.ADMIN_LOG_EMBED_TITLE,
@@ -340,19 +341,19 @@ class VerificationModal(Modal):
         embed.add_field(name="Submitted Name", value=name, inline=True)
         embed.add_field(name="Submitted Team #", value=team_number if team_number else "N/A", inline=True)
         embed.set_footer(text="Review and approve/deny below.")
-        logging.info("Verification request embed created.")
+        logging.warning("Verification request embed created.")
 
         admin_view = AdminApprovalView(member.id, name, team_number)
-        logging.info("AdminApprovalView instance created for the request.")
+        logging.warning("AdminApprovalView instance created for the request.")
         
         try:
             await admin_channel.send(embed=embed, view=admin_view)
-            logging.info(f"Successfully sent verification request to admin channel ({admin_channel.name}) for {member.name}.")
+            logging.warning(f"Successfully sent verification request to admin channel ({admin_channel.name}) for {member.name}.")
             await interaction.response.send_message(
                 "Your verification request has been submitted! An admin will review it shortly.",
                 ephemeral=True
             )
-            logging.info("Ephemeral message sent to user confirming submission.")
+            logging.warning("Ephemeral message sent to user confirming submission.")
         except discord.Forbidden:
             logging.error(f"Forbidden permission when sending to admin log channel ({admin_channel.name}). Check bot's role hierarchy and channel permissions.", exc_info=True)
             await interaction.response.send_message(
@@ -375,7 +376,7 @@ async def on_ready():
     Event handler that runs when the bot successfully connects to Discord.
     Ensures the welcome message is sent to the designated channel.
     """
-    logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    logging.warning(f"Logged in as {bot.user} (ID: {bot.user.id})")
     setup_discord_logging(bot, config.BOT_LOG_CHANNEL_ID)
     # Ensure the welcome message is sent if it's not already there
     await send_welcome_message()
@@ -386,7 +387,7 @@ async def on_member_join(member):
     Event handler that runs when a new member joins the guild.
     Sends a welcome message to the designated channel if one isn't already present.
     """
-    logging.info(f"Member joined: {member.name} (ID: {member.id}).")
+    logging.warning(f"Member joined: {member.name} (ID: {member.id}).")
     welcome_channel = bot.get_channel(config.WELCOME_CHANNEL_ID)
     if welcome_channel:
         embed = discord.Embed(
@@ -419,9 +420,9 @@ async def on_member_join(member):
         
         if not found_welcome_message:
             await welcome_channel.send(embed=embed, view=WelcomeView())
-            logging.info(f"Sent welcome message to {welcome_channel.name} for new member {member.name}.")
+            logging.warning(f"Sent welcome message to {welcome_channel.name} for new member {member.name}.")
         else:
-            logging.info(f"Welcome message already found in {welcome_channel.name}. Not sending again on member join.")
+            logging.wawrning(f"Welcome message already found in {welcome_channel.name}. Not sending again on member join.")
 
 
 async def send_welcome_message():
@@ -459,9 +460,9 @@ async def send_welcome_message():
                 color=discord.Color.blue()
             )
             await welcome_channel.send(embed=embed, view=WelcomeView())
-            logging.info(f"Initial welcome message sent to {welcome_channel.name}.")
+            logging.warning(f"Initial welcome message sent to {welcome_channel.name}.")
         else:
-            logging.info(f"Welcome message already found in {welcome_channel.name}. Not sending again on startup.")
+            logging.warning(f"Welcome message already found in {welcome_channel.name}. Not sending again on startup.")
 
 if __name__ == '__main__':
     # Start the Flask server in a separate thread
