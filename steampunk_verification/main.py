@@ -28,7 +28,7 @@ class StreamToLogger:
 stdout_logger = logging.getLogger("STDOUT")
 stderr_logger = logging.getLogger("STDERR")
 
-sys.stdout = StreamToLogger(stdout_logger, logging.DEBUG)
+sys.stdout = StreamToLogger(stdout_logger, logging.WARNING)
 sys.stderr = StreamToLogger(stderr_logger, logging.ERROR)
 
 # --- Discord logging handler ---
