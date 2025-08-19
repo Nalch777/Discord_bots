@@ -41,9 +41,9 @@ class DiscordHandler(logging.Handler):
     def emit(self, record):
         log_entry = self.format(record)
         # schedule coroutine safely
-        asyncio.run_coroutine_threadsafe(self._send_log(log_entry), self.bot.loop)
+        asyncio.run_coroutine_threadsafe(self._send_log(log_entry, record.levelname), self.bot.loop)
 
-    async def _send_log(self, message: str):
+    async def _send_log(self, message: str, levelname: str):
         await self.bot.wait_until_ready()
         channel = self.bot.get_channel(self.channel_id)
         if channel:
@@ -51,7 +51,7 @@ class DiscordHandler(logging.Handler):
                 # prevent flooding: Discord message max 2000 chars
                 if len(message) > 1900:
                     message = message[:1900] + "… (truncated)"
-                await channel.send(f"📜 `{record.levelname}`: {message}")
+                await channel.send(f"📜 `{levelname}`: {message}")
             except Exception as e:
                 logging.error(f"Failed to send log to Discord: {e}")
 
@@ -61,9 +61,10 @@ def setup_discord_logging(bot, log_channel_id: int):
     logging.getLogger().addHandler(discord_handler)
     
 # Configure logging for discord.py
-handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+# handler = logging.StreamHandler()
+# handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
+#logging.basicConfig(level=logging.INFO, handlers=[handler])
+logging.basicConfig(level=logging.INFO)
 # Optionally, set discord.py's logging to DEBUG for more verbose output
 # logging.getLogger('discord').setLevel(logging.DEBUG)
 
@@ -82,7 +83,8 @@ app = Flask(__name__)
 # Configure Flask logging
 flask_logger = logging.getLogger('flask_app')
 flask_logger.setLevel(logging.INFO)
-flask_logger.addHandler(handler) # Use the same handler as discord.py for consistency
+flask_logger.propagate = True
+# flask_logger.addHandler(handler) # Use the same handler as discord.py for consistency
 
 @app.before_request
 def log_request_info():
@@ -463,7 +465,7 @@ async def send_welcome_message():
 
 if __name__ == '__main__':
     # Start the Flask server in a separate thread
-    flask_thread = threading.Thread(target=run_flask)
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
     # Start the Discord bot
