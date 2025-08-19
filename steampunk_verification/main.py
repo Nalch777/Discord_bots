@@ -10,6 +10,7 @@ import os
 from flask import Flask, request # Import request to access incoming request data
 import threading
 import sys
+import time
 
 
 # --- Redirect stdout/stderr into logging ---
@@ -41,7 +42,7 @@ class DiscordHandler(logging.Handler):
         self._last_sent = 0
         self._queue = asyncio.Queue()
         # Start the background worker
-        self._task = asyncio.create_task(self._worker())
+        # self._task = asyncio.create_task(self._worker())
 
     def emit(self, record):
         """Queue the log record instead of sending immediately."""
@@ -73,6 +74,9 @@ class DiscordHandler(logging.Handler):
                 await channel.send(f"📜 `{levelname}`: {message}")
             except Exception as e:
                 logging.error(f"Failed to send log to Discord: {e}")
+
+    async def start_worker(self):
+        self._task = asyncio.create_task(self._worker())
 
 def setup_discord_logging(bot, log_channel_id: int):
     discord_handler = DiscordHandler(bot, log_channel_id, min_interval_ms=30)
@@ -396,6 +400,11 @@ async def on_ready():
     """
     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     setup_discord_logging(bot, config.BOT_LOG_CHANNEL_ID)
+    # start the handler worker
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, DiscordHandler):
+            asyncio.run_coroutine_threadsafe(handler._send_log("Test message", "INFO"), bot.loop)
+            await handler.start_worker()
     # Ensure the welcome message is sent if it's not already there
     await send_welcome_message()
 
