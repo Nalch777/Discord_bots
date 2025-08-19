@@ -9,7 +9,57 @@ import logging
 import os
 from flask import Flask, request # Import request to access incoming request data
 import threading
+import sys
 
+
+# --- Redirect stdout/stderr into logging ---
+class StreamToLogger:
+    def __init__(self, logger, log_level):
+        self.logger = logger
+        self.log_level = log_level
+
+    def write(self, buf):
+        for line in buf.rstrip().splitlines():
+            self.logger.log(self.log_level, line.rstrip())
+
+    def flush(self):
+        pass
+
+stdout_logger = logging.getLogger("STDOUT")
+stderr_logger = logging.getLogger("STDERR")
+
+sys.stdout = StreamToLogger(stdout_logger, logging.INFO)
+sys.stderr = StreamToLogger(stderr_logger, logging.ERROR)
+
+# --- Discord logging handler ---
+class DiscordHandler(logging.Handler):
+    def __init__(self, bot, channel_id: int):
+        super().__init__()
+        self.bot = bot
+        self.channel_id = channel_id
+
+    def emit(self, record):
+        log_entry = self.format(record)
+        # schedule coroutine safely
+        asyncio.run_coroutine_threadsafe(self._send_log(log_entry), self.bot.loop)
+
+    async def _send_log(self, message: str):
+        await self.bot.wait_until_ready()
+        channel = self.bot.get_channel(self.channel_id)
+        if channel:
+            try:
+                # prevent flooding: Discord message max 2000 chars
+                if len(message) > 1900:
+                    message = message[:1900] + "… (truncated)"
+                await channel.send(f"📜 `{record.levelname}`: {message}")
+            except Exception as e:
+                logging.error(f"Failed to send log to Discord: {e}")
+
+def setup_discord_logging(bot, log_channel_id: int):
+    discord_handler = DiscordHandler(bot, log_channel_id)
+    discord_handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
+    logging.getLogger().addHandler(discord_handler)
+    
 # Configure logging for discord.py
 handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
@@ -324,6 +374,7 @@ async def on_ready():
     Ensures the welcome message is sent to the designated channel.
     """
     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    setup_discord_logging(bot, config.LOG_CHANNEL_ID)
     # Ensure the welcome message is sent if it's not already there
     await send_welcome_message()
 
