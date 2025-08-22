@@ -137,6 +137,17 @@ def run_flask():
     flask_logger.warning(f"Flask app starting on host 0.0.0.0, port {port}")
     app.run(host='0.0.0.0', port=port)
 
+def keep_alive(handler, bot):
+    """Sends keep alive messages to dicord channel"""
+    start_time = time.time()
+    while True:
+        delta_time = time.time() - start_time
+        if delta_time > 300:
+            print("Scheduling keep-alive message...")
+            asyncio.run_coroutine_threadsafe(handler._send_log("Keep alive message", "INFO"), bot.loop)
+            start_time = time.time()
+        time.sleep(5)
+
 # --- Views for Welcome and Admin Approval ---
 
 class WelcomeView(View):
@@ -405,6 +416,9 @@ async def on_ready():
         if isinstance(handler, DiscordHandler):
             asyncio.run_coroutine_threadsafe(handler._send_log("Test message", "INFO"), bot.loop)
             await handler.start_worker()
+            # Start the Flask server in a separate thread
+            keep_alive_thread = threading.Thread(target=keep_alive, args=(handler, bot), daemon=True)
+            keep_alive_thread.start()
     # Ensure the welcome message is sent if it's not already there
     await send_welcome_message()
 
